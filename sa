@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# stock-analysis 的薄包装：自动加载本仓库的 .env，再把参数原样转发给 CLI。
+#
+# 直接用 stock-analysis 也完全可以，这个包装只是省掉每次手动 export 环境变量。
+#
+#   ./sa --market price-move --symbol 300750 --depth standard
+#   ./sa --doctor          # 体检：装没装、配置读到没、数据源通不通
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${SA_ENV_FILE:-$REPO_ROOT/.env}"
+
+# ---------------------------------------------------------------- 加载 .env
+# 只导出 STOCK_ANALYSIS_* 变量，避免 .env 里的杂项污染进程环境。
+load_env() {
+  [ -f "$ENV_FILE" ] || return 0
+  while IFS= read -r raw || [ -n "$raw" ]; do
+    line="${raw%$'\r'}"
+    line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    case "$line" in
+      ''|'#'*) continue ;;
+      export\ *) line="${line#export }" ;;
+    esac
+    case "$line" in
+      STOCK_ANALYSIS_*=*) ;;
+      *) continue ;;
+    esac
+    key="${line%%=*}"
+    value="${line#*=}"
+    # 去掉包裹引号
+    case "$value" in
+      \"*\") value="${value%\"}"; value="${value#\"}" ;;
+      \'*\') value="${value%\'}"; value="${value#\'}" ;;
+    esac
+    [ -n "$value" ] || continue          # 空值不导出，让上游用自己的默认值
+    export "$key=$value"
+  done < "$ENV_FILE"
+}
+
+load_env
+
+# ---------------------------------------------------------------- doctor
+if [ "${1:-}" = "--doctor" ]; then
+  echo "stock-analysis 体检"
+  echo "========================================"
+
+  if command -v stock-analysis >/dev/null 2>&1; then
+    echo "✓ CLI      $(command -v stock-analysis)"
+    echo "  版本     $(stock-analysis --version 2>&1 | head -1)"
+  else
+    echo "✗ CLI      未安装或不在 PATH → 运行 ./setup.sh"
+    exit 1
+  fi
+
+  ENGINE_DIR="$REPO_ROOT/engines/stock-analysis"
+  if [ -f "$ENGINE_DIR/pyproject.toml" ]; then
+    echo "✓ 源码     $(git -C "$ENGINE_DIR" rev-parse --short HEAD 2>/dev/null || echo '?')"
+  else
+    echo "✗ 源码     子模块为空 → git submodule update --init"
+  fi
+
+  if [ -f "$ENV_FILE" ]; then
+    count=$(grep -cE '^[[:space:]]*STOCK_ANALYSIS_[A-Z_]+=..*' "$ENV_FILE" 2>/dev/null || true)
+    echo "✓ 配置     $ENV_FILE（已设置 ${count:-0} 项，全部可选）"
+  else
+    echo "◐ 配置     没有 .env —— 不影响使用，全部走默认值"
+  fi
+
+  # 未安装时 agent doctor 会返回非零，这属于正常状态，不能让它中断体检
+  echo "◐ Agent 入口"
+  stock-analysis-agent doctor all 2>&1 | sed 's/^/    /' || true
+
+  echo "  数据源连通性（需要能访问中国财经站点）"
+  for host in push2his.eastmoney.com hq.sinajs.cn; do
+    if curl -s -o /dev/null -m 8 "https://$host/" 2>/dev/null; then
+      echo "    ✓ $host"
+    else
+      echo "    ✗ $host 不可达 —— 报告会是空壳，请检查网络/代理"
+    fi
+  done
+  exit 0
+fi
+
+# ---------------------------------------------------------------- 转发
+if ! command -v stock-analysis >/dev/null 2>&1; then
+  echo "stock-analysis 未安装。请先运行 ./setup.sh" >&2
+  exit 1
+fi
+
+exec stock-analysis "$@"

@@ -1,0 +1,3 @@
+[submodule "engines/stock-analysis"]
+	path = engines/stock-analysis
+	url = https://github.com/AdvancingTitans/stock-analysis.git
