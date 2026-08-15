@@ -1,8 +1,0 @@
-# hub 自身的依赖 —— 刻意保持最小。
-# 核心逻辑（导通层、台账、schema）只用标准库，没有这些也能跑 doctor/envmap/list。
-# 下面两个只在 `hub score` 回填真实行情时才需要。
-akshare>=1.16.0
-pandas>=2.0.0
-
-# 开发/测试
-pytest>=8.0.0
