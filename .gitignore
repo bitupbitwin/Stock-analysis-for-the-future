@@ -1,0 +1,30 @@
+# 密钥 —— 绝不入库
+.env
+engines/*/.env
+
+# 各引擎的虚拟环境
+.venv/
+engines/.venvs/
+
+# 台账与报告产物
+data/
+!data/.gitkeep
+
+# 引擎运行时产物（子模块内，双保险）
+engines/*/reports/
+engines/*/logs/
+engines/*/data/
+engines/*/*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
